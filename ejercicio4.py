@@ -20,16 +20,7 @@ class MovieDatabase:
             self.driver.close()
             logger.info("Conexión cerrada")
 
-    def crear_usuario(self, user_id, name):
-        query = """
-        MERGE (u:User {userId: $user_id})
-        ON CREATE SET u.name = $name
-        RETURN u
-        """
-        with self.driver.session() as session:
-            return session.run(query, user_id=user_id, name=name).single()
-
-    def crear_pelicula(self, movie_id, title, tmdbId, released, imdbRating, year, imdbId, runtime, countries, imdbVotes, url, revenue, plot, poster, budget, languages):
+    def crear_pelicula(self, movie_id, title, tmdbId, released, imdbRating, year, imdbId, runtime, countries, imdbVotes, url, revenue, plot, poster, budget, languages, genres):
         query = """
         MERGE (m:Movie {movieId: $movie_id})
         ON CREATE SET m.title = $title, m.tmdbId = $tmdbId, m.released = $released, m.imdbRating = $imdbRating,
@@ -38,9 +29,12 @@ class MovieDatabase:
         RETURN m
         """
         with self.driver.session() as session:
-            return session.run(query, movie_id=movie_id, title=title, tmdbId=tmdbId, released=released, imdbRating=imdbRating,
-                               year=year, imdbId=imdbId, runtime=runtime, countries=countries, imdbVotes=imdbVotes,
-                               url=url, revenue=revenue, plot=plot, poster=poster, budget=budget, languages=languages).single()
+            session.run(query, movie_id=movie_id, title=title, tmdbId=tmdbId, released=released, imdbRating=imdbRating,
+                        year=year, imdbId=imdbId, runtime=runtime, countries=countries, imdbVotes=imdbVotes,
+                        url=url, revenue=revenue, plot=plot, poster=poster, budget=budget, languages=languages)
+            
+            for genre in genres:
+                self.crear_genero(movie_id, genre)
 
     def crear_persona(self, name, tmdbId, born, died, bornIn, url, imdbId, bio, poster, roles, movie_id):
         query = """
@@ -71,6 +65,17 @@ class MovieDatabase:
         """
         with self.driver.session() as session:
             return session.run(query, user_id=user_id, movie_id=movie_id, rating=rating, timestamp=timestamp).single()
+        
+    def crear_genero(self, movie_id, genre_name):
+        query = """
+        MERGE (g:Genre {name: $genre_name})
+        WITH g
+        MATCH (m:Movie {movieId: $movie_id})
+        MERGE (m)-[:IN_GENRE]->(g)
+        RETURN g, m
+        """
+        with self.driver.session() as session:
+            session.run(query, movie_id=movie_id, genre_name=genre_name)
 
 if __name__ == "__main__":
     URI = "neo4j+s://697a5cac.databases.neo4j.io"
@@ -79,22 +84,13 @@ if __name__ == "__main__":
     
     db = MovieDatabase(URI, USERNAME, PASSWORD)
     
-    usuarios = [
-        ("user1", "Juan Pérez"),
-        ("user2", "María López"),
-        ("user3", "Carlos Ruiz"),
-        ("user4", "Ana García"),
-        ("user5", "Diego Martín")
-    ]
-    for user_id, name in usuarios:
-        db.crear_usuario(user_id, name)
     
     peliculas = [
-        (1, "El Padrino", 238, "1972-03-14", 9.2, 1972, 238, 175, ["USA"], 1500000, "https://www.imdb.com/title/tt0068646/", 245066411, "Historia de la mafia italiana", "padrino.jpg", 6000000, ["English", "Italian"]),
-        (2, "The Matrix", 603, "1999-03-31", 8.7, 1999, 603, 136, ["USA"], 1700000, "https://www.imdb.com/title/tt0133093/", 463517383, "Realidad simulada", "matrix.jpg", 63000000, ["English"])
+        (1, "El Padrino", 238, "1972-03-14", 9.2, 1972, 238, 175, ["USA"], 1500000, "https://www.imdb.com/title/tt0068646/", 245066411, "Historia de la mafia italiana", "padrino.jpg", 6000000, ["English", "Italian"], ["Crime", "Drama"]),
+        (2, "The Matrix", 603, "1999-03-31", 8.7, 1999, 603, 136, ["USA"], 1700000, "https://www.imdb.com/title/tt0133093/", 463517383, "Realidad simulada", "matrix.jpg", 63000000, ["English"], ["Action", "Sci-Fi"])
     ]
-    for movie in peliculas:
-        db.crear_pelicula(*movie)
+    for pelicula in peliculas:
+        db.crear_pelicula(*pelicula)
     
     ratings = [
         ("user1", 1, 5, 1672531200), ("user1", 2, 4, 1672617600),
@@ -113,7 +109,7 @@ if __name__ == "__main__":
         ("Lana Wachowski", 987, "1965-06-21", None, "USA", "https://www.imdb.com/name/nm0905154/", 154, "Directora de The Matrix", "wachowski.jpg", ["Director"], 2),
         ("Quentin Tarantino", 159, "1963-03-27", None, "USA", "https://www.imdb.com/name/nm0000233/", 233, "Director y Actor", "tarantino.jpg", ["Director", "Actor"], 2)
     ]
-    for person in personas:
-        db.crear_persona(*person)
+    for persona in personas:
+        db.crear_persona(*persona)
     
     db.cerrar()
